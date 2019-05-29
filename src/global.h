@@ -15,31 +15,31 @@
 #define TICKS_MS    20              // This is set by Timer 1 tick rate
 #define MAX_BRIGHT  63              // maximum tick count for brightness
 #define MIN_BRIGHT   1              // minimum tick count for brightness
-
+#define BLANK_CHAR  0xFF
 //---------------------------------------------------------------------------
 // Begin Hardware Option configuration
 //---------------------------------------------------------------------------
 
 #define BOARD_TALKING      FALSE
-#define BOARD_BLUE_6       FALSE
+#define BOARD_BLUE_6       TRUE
 #define BOARD_BLUE_5_RELAY FALSE
 #define BOARD_YELLOW_5     FALSE
-#define BOARD_YELLOW_SMALL TRUE
+#define BOARD_YELLOW_SMALL FALSE
 #define BOARD_WHITE_SMALL  FALSE
 #define BOARD_GREEN_SMALL  FALSE
 
-#define COMMON_ANODE   FALSE
-#define COMMON_CATHODE TRUE
+#define COMMON_ANODE   TRUE
+#define COMMON_CATHODE FALSE
 
-#define PROC_IS_15W408AS TRUE
-#define PROC_IS_15W404AS FALSE
+#define PROC_IS_15W408AS FALSE
+#define PROC_IS_15W404AS TRUE
 #define PROC_IS_15F204EA FALSE
 
 #define HAS_LDR TRUE
 #define HAS_THERMISTOR TRUE
 #define HAS_RELAY FALSE
 
-#define DIGIT_3_FLIP FALSE
+#define DIGIT_3_FLIP TRUE
 
 // When setting TEST_DEFAULTS to TRUE,
 // ensure that all display options are TRUE as well
@@ -63,19 +63,21 @@
 #define OPT_TEMP_DSP    TRUE
 #define OPT_DATE_DSP    TRUE
 #define OPT_DAY_DSP     TRUE
-#define OPT_UNITS_GROUP FALSE    // use 12/F/MD or 24/C/DM groups
+#define OPT_DAY_ALPHA	  TRUE	  // display days as characters
+#define OPT_UNITS_GROUP FALSE   // use 12/F/MD or 24/C/DM groups
+#define OPT_BLANK_ZERO  TRUE	  // T = 1:00 F = 01:00
 
 // Set the default units for the clock
 // Use only one each of these groups of two
 
-#define SET_12HR_FORMAT TRUE
-#define SET_24HR_FORMAT FALSE
+#define SET_12HR_FORMAT FALSE
+#define SET_24HR_FORMAT TRUE
 
-#define SET_MMDD_FORMAT TRUE
-#define SET_DDMM_FORMAT FALSE
+#define SET_MMDD_FORMAT FALSE
+#define SET_DDMM_FORMAT TRUE
 
-#define SET_DEGF_FORMAT TRUE
-#define SET_DEGC_FORMAT FALSE
+#define SET_DEGF_FORMAT FALSE
+#define SET_DEGC_FORMAT TRUE
 
 //---------------------------------------------------------------------------
 // End Software Option configuration
@@ -205,7 +207,12 @@
 #define IO_RD (P5 & 0b00100000)>>5      // read I/O pin
 #define SCLK P3_2                       // P3.2 DS1302 pin 7
 #elif PROC_IS_15F204EA
-// not setup yet
+#define CE_HI  P0 |= 0b00000001;       // P5.4 DS1302 pin 5 set
+#define CE_LO  P0 &= 0b11111110;       //                   unset
+#define IO_LO  P0 &= 0b11111101;       // P5.5 DS1302 pin 6
+#define IO_WR  P0 |= ((W_Byte&0x01)<<1 ) // write I/O pin
+#define IO_RD  (P0 & 0b00000010)>>1      // read I/O pin
+#define SCLK P3_2                       // P3.2 DS1302 pin 7
 #endif
 
 // adc channels for sensors

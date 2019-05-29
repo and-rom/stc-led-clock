@@ -36,6 +36,9 @@ __bit   dp2,dp3;                // numbers match Cathode[] array index
 __bit   AM_PM;                  // used to set decimal point on/off
 __bit   readyRead;              // used to read temperature once per second
 __bit   timeChanged;            // write time to clock when set
+#if OPT_BLANK_ZERO
+__bit   blankZero;              // set true to suppress leading zero in clock
+#endif
 
 uint8_t maskOnOff;              // set to 0x7F or 0xFF to blink decimal point
 uint8_t maskDp0;                // set to 0x7F or 0xFF with dp0 (=dp on or off)
@@ -82,7 +85,7 @@ void displayUpdateISR(void){
         if (++aPos >= 4)            // Done with this digit so move to next
             aPos = 0;               // and reset timers so next time in turn on new anode
             aOnTicks = brightLevel;
-            if (aOnTicks == MAX_BRIGHT)
+            if (aOnTicks >= MAX_BRIGHT)
                aOffTicks = 1;      // don't allow Off to goto zero!!
             else
                aOffTicks = MAX_BRIGHT - aOnTicks;
@@ -109,7 +112,13 @@ void updateClock()
     getClock();
     setupHour(clockRam.hr);     // possibly convert to 12 format with AM/PM
     m = clockRam.min;
+#if OPT_BLANK_ZERO
+ blankZero = TRUE;
     displayHoursOn();
+ blankZero = FALSE;
+#else
+    displayHoursOn();
+#endif
     displayMinutesOn();
 }
 
@@ -191,7 +200,7 @@ void displayFSM()
         if ( !userTimer100 ) displayState = stClock;
         break;
 
-#if OPT_TEMP_DSP  
+#if OPT_TEMP_DSP
     case stOptTemp:
         displayTemperature();
         stateSwitchWithS1(scSet);
@@ -248,20 +257,20 @@ void displayFSM()
 // scSet,scBeep,scDsp,scCfg
 
     case scSet:
-        setText4(txSet);
+        setAllDigits(txSet);
         stateSwitchWithS1(scBeep);
         stateSwitchWithS2(msClock);
         break;
 
     case scBeep:
-        setText4(txBeep);
+        setAllDigits(txBeep);
         stateSwitchWithS1(scDsp);
         stateSwitchExtendedWithS2(msAlarmOn,txAlarm,AlarmOn);
         break;
 
 #if OPT_TEMP_DSP | OPT_DATE_DSP | OPT_DAY_DSP
     case scDsp:
-        setText4(txDsp);
+        setAllDigits(txDsp);
         stateSwitchWithS1(scCfg);
   #if OPT_TEMP_DSP
         stateSwitchExtendedWithS2(msDspTempOn,txTemp,TempOn);
@@ -274,7 +283,7 @@ void displayFSM()
 #endif
 
     case scCfg:
-        setText4(txCfg);
+        setAllDigits(txCfg);
         stateSwitchWithS1(msExit);
 #if OPT_UNITS_GROUP
         stateSwitchWithS2(msSetUnits);
@@ -291,7 +300,7 @@ void displayFSM()
 // msClock,msClockHour,msClockMinute
 
     case msClock:
-        setText2(txClock);
+        setHourDigits(txClock);
         stateSwitchWithS1(msAlarm);
         stateSwitchWithS2(msClockHour);
         break;
@@ -329,7 +338,7 @@ void displayFSM()
 // msAlarm,msAlarmHour,msAlarmMinute
 
     case msAlarm:
-        setText2(txAlarm);
+        setHourDigits(txAlarm);
         stateSwitchWithS1(msChime);
         stateSwitchWithS2(msAlarmHour);
         break;
@@ -365,7 +374,7 @@ void displayFSM()
 // msChime,msChimeStartHour,msChimeStopHour
 
     case msChime:
-        setText2(txChime);
+        setHourDigits(txChime);
 #if OPT_DATE_DSP
         stateSwitchWithS1(msDate);
 #elif OPT_DAY_DSP
@@ -407,7 +416,7 @@ void displayFSM()
         dp1 = ON;
         dp2 = OFF;
         dp3 = OFF;
-        setText2(txDate);
+        setHourDigits(txDate);
   #if OPT_DAY_DSP
         stateSwitchWithS1(msDay);
   #else
@@ -444,16 +453,13 @@ void displayFSM()
 
 #if OPT_DAY_DSP
     case msDay:
-        setText2(txDay);
+        setHourDigits(txDay);
         stateSwitchWithS1(msExit);
         stateSwitchWithS2(msDayOfWeek);
         break;
 
     case msDayOfWeek:
-        m = clockRam.day;
-        dp1 = OFF;              // hold-over from date display
-        displayHoursOff();
-        displayMinutesFlash();
+        setDayOfWeek();
         stateSwitchWithS1(msExit);
         if (checkAndClearS2())
             clockRam.day = incrementDay(clockRam.day);
@@ -580,87 +586,87 @@ void displayFSM()
 
 #if OPT_UNITS_GROUP
     case msSetUnits:
-        setText4(txUnit);
+        setAllDigits(txUnit);
         stateSwitchWithS1(msBrightness);
         stateSwitchExtendedWithS2(msUS,NoText2,Select_12);
         break;
 
     case msEU:
-        setText2A(txEU);
+        setMinuteDigits(txEU);
         changeTimeFormat(FALSE);
         stateSwitchWithS1(msBrightness);
         stateSwitchWithS2(msUS);
         break;
 
     case msUS:
-        setText2A(txUS);
+        setMinuteDigits(txUS);
         changeTimeFormat(TRUE);
         stateSwitchWithS1(msBrightness);
         stateSwitchWithS2(msEU);
         break;
 #else
     case msFormatTime:
-        setText4(tx1224);
+        setAllDigits(tx1224);
         stateSwitchWithS1(msTempUnits);
         stateSwitchExtendedWithS2(ms12,NoText2,Select_12);
         break;
 
     case ms12:
-        setText2A(tx12);
+        setMinuteDigits(tx12);
         changeTimeFormat(TRUE);
         stateSwitchWithS1(msTempUnits);
         stateSwitchWithS2(ms24);
         break;
 
     case ms24:
-        setText2A(tx24);
+        setMinuteDigits(tx24);
         changeTimeFormat(FALSE);
         stateSwitchWithS1(msTempUnits);
         stateSwitchWithS2(ms12);
         break;
 
     case msTempUnits:
-        setText4(txTemp4);
+        setAllDigits(txTemp4);
         stateSwitchWithS1(msFormatDate);
         stateSwitchExtendedWithS2(msF,NoText2,Select_FC);
         break;
 
     case msF:
-        setText2A(txF);
+        setMinuteDigits(txF);
         Select_FC = TRUE;
         stateSwitchWithS1(msFormatDate);
         stateSwitchWithS2(msC);
         break;
 
     case msC:
-        setText2A(txC);
+        setMinuteDigits(txC);
         Select_FC = FALSE;
         stateSwitchWithS1(msFormatDate);
         stateSwitchWithS2(msF);
         break;
 
     case msFormatDate:
-        setText4(txDate4);
+        setAllDigits(txDate4);
         stateSwitchWithS1(msBrightness);
         stateSwitchExtendedWithS2(ms1231,NoText2,Select_MD);
         break;
 
     case ms1231:
-        setText4(tx1231);
+        setAllDigits(tx1231);
         Select_MD = TRUE;
         stateSwitchWithS1(msBrightness);
         stateSwitchWithS2(ms3112);
         break;
 
     case ms3112:
-        setText4(tx3112);
+        setAllDigits(tx3112);
         Select_MD = FALSE;
         stateSwitchWithS1(msBrightness);
         stateSwitchWithS2(ms1231);
         break;
 #endif
     case msBrightness:
-        setText4(txBrt);
+        setAllDigits(txBrt);
 #if OPT_TEMP_DSP
         stateSwitchWithS1(msTempCal);
 #else
@@ -709,7 +715,7 @@ void displayFSM()
             displayState = msBrtMax;
             break;
         }
-        setText4(txCal);
+        setAllDigits(txCal);
         stateSwitchWithS1(msExit);
         stateSwitchWithS2(msSetTemp);
         break;
@@ -764,7 +770,7 @@ void displayFSM()
 // End state machine
 // ###################################################################################
 
-void setText4(uint8_t index)
+void setAllDigits(uint8_t index)
 {
     segs[H10] = textDesc4[(index << 2)];
     segs[H01] = textDesc4[(index << 2)+1];
@@ -772,7 +778,7 @@ void setText4(uint8_t index)
     segs[M01] = textDesc4[(index << 2)+3];
 }
 
-void setText2(uint8_t index)
+void setHourDigits(uint8_t index)
 {
     segs[H10] = textDesc2[(index << 1)];
     segs[H01] = textDesc2[(index << 1)+1];
@@ -780,7 +786,7 @@ void setText2(uint8_t index)
     segs[M01] = 0xFF;
 }
 
-void setText2A(uint8_t index)
+void setMinuteDigits(uint8_t index)
 {
     segs[H10] = 0xFF;
     segs[H01] = 0xFF;
@@ -790,25 +796,16 @@ void setText2A(uint8_t index)
 
 void setMsgOn()
 {
-#if DIGIT_3_FLIP
-    segs[M10] = 0x9C; // o
-    segs[M01] = 0xAB; // n
-#else
-    segs[M10] = 0XA3; // o
-    segs[M01] = 0xAB; // n
-#endif
+    segs[M10] = textDesc2[(txOn << 1)];
+    segs[M01] = textDesc2[(txOn << 1)+1];
 }
 
 void setMsgOff()
 {
-#if DIGIT_3_FLIP
-    segs[M10] = 0XC0; // o
-    segs[M01] = 0x8E; // F
-#else
-    segs[M10] = 0xC0; // o
-    segs[M01] = 0x8E; // F
-#endif
+    segs[M10] = textDesc2[(txOff << 1)];
+    segs[M01] = textDesc2[(txOff << 1)+1];
 }
+
 
 // Setup hour display if 12 hour format.
 // Set the module level global var "h" used thoughout the state machine
@@ -897,16 +894,68 @@ void displayDate()
 }
 
 #if OPT_DAY_DSP
+void setDayOfWeek()
+{
+  #if OPT_DAY_ALPHA
+	if (getStateS2Flasher()){
+		displayDayOfWeek();
+	}
+	else {
+        segs[H10] = BLANK_CHAR;
+        segs[H01] = BLANK_CHAR;
+        segs[M10] = BLANK_CHAR;
+    	segs[M01] = BLANK_CHAR;
+	}
+  #else
+        dp1 = OFF;              // hold-over from date display
+        m = clockRam.day;
+        displayHoursOff();
+        displayMinutesFlash();
+		//displayDayOfWeek();
+  #endif
+}
+#endif
+
+#if OPT_DAY_DSP
+
 void displayDayOfWeek()
 {
     dp1 = OFF;
     dp2 = OFF;
     dp3 = OFF;
-    segs[H10] = 0xFF;
+  #if OPT_DAY_ALPHA
+    h = clockRam.day;               // use hours (unused right now)
+    __asm
+    mov     _CathodeBuf,#0xFF	    ; blank first digit
+    mov     r0,#_CathodeBuf+1	    ; ram destination address
+    mov     r1,_h         		    ; get day of week and make it zero origin
+    dec     r1
+    mov     a,r1
+    add     a,r1
+    add     a,r1                  ; *3 bytes per text entry
+    mov     r1,a
+    mov     r2,#3                 ; number of bytes to move
+    mov     dptr,#_ledDOW         ; source table address
+    jnb     _Select_MD,pLp1
+    inc     dptr                  ; adjust offset for US DOW table
+    inc     dptr                  ; adjust offset for US DOW table
+    inc     dptr                  ; adjust offset for US DOW table
+pLp1:
+    mov     a,r1                  ; offset into code seg source
+    movc    a,@a+dptr             ; get byte in code seg from @(r1+dpr)
+    mov     @r0,a                 ; put byte to ram @r0
+    inc     r0
+    inc     r1
+    djnz    r2,pLp1	              ; loop for r2 bytes
+    __endasm;
+  #else
+    segs[H10] = BLANK_CHAR;
     segs[H01] = 0xBF;
     segs[M10] = ledSegBT[clockRam.day];
     segs[M01] = 0xBF;
+  #endif
 }
+
 #endif
 
 void blankDisplay(void)
@@ -1042,35 +1091,41 @@ _displayHoursFlash:
 L001:
     mov     a,#0xFF
     addc    a,#0
-	mov     _maskOnOff,a        ; =0 when cy set, =ff when not
+    mov     _maskOnOff,a        ; =0 when cy set, =ff when not
 
-    mov     a,#0xFF
+    mov     a,#BLANK_CHAR
     mov     c,_dp0
     cpl     c                   ; 0x7f = turn it on
     rrc     a                   ; 0xFF = turn it off
-	mov     _maskDp0,a
+    mov     _maskDp0,a
 
-    mov     a,#0xFF
+    mov     a,#BLANK_CHAR
     mov     c,_dp1
     cpl     c
     rrc     a
-	mov     _maskDp1,a
+    mov     _maskDp1,a
 
-	mov	    a,_h                ; get hours
-	swap	a                   ; cheap way to shift right 4 places
-	anl     a,#0x0f
-	mov     dptr,#_ledSegTB
-	movc	a,@a+dptr
-	orl 	a,_maskOnOff
-	anl 	a,_maskDp0
-	mov 	_CathodeBuf,a
+    mov     dptr,#_ledSegTB
+    mov     a,_h                ; get hours
+    swap    a                   ; cheap way to shift right 4 places
+    anl     a,#0x0f
+    jnb     _blankZero,L0011    ; not blanking, leave
+    jnz     L0011               ; blanking but not zero, leave
+    mov     a,#0xFF             ; A was 0 on entry
+    sjmp    L0012               ; write FF to display to blank digit
+L0011:
+    movc    a,@a+dptr
+    orl     a,_maskOnOff
+    anl     a,_maskDp0
+L0012:
+    mov     _CathodeBuf,a
 
-	mov     a,#0x0f
-	anl     a,_h
-	movc	a,@a+dptr
-	orl     a,_maskOnOff
-	anl     a,_maskDp1
-	mov     (_CathodeBuf + 1),a
+    mov     a,#0x0f
+    anl     a,_h
+    movc	a,@a+dptr
+    orl     a,_maskOnOff
+    anl     a,_maskDp1
+    mov     (_CathodeBuf + 1),a
     __endasm;
 }
 

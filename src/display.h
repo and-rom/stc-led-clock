@@ -82,6 +82,8 @@ enum text2Entry {
     txF,
     txC,
 #endif
+    txOff,
+    txOn,
     NoText2
     };
 
@@ -131,11 +133,12 @@ void displayUpdateISR();
 void setChimeVars();
 void getDateVars();
 void putDateVars();
-void setText2(uint8_t);
-void setText2A(uint8_t);
-void setText4(uint8_t);
+void setHourDigits(uint8_t);
+void setMinuteDigits(uint8_t);
+void setAllDigits(uint8_t);
 void setMsgOn();
 void setMsgOff();
+void setDayOfWeek();
 
 uint8_t incrementHours(uint8_t);
 uint8_t incrementMinutes(uint8_t);
